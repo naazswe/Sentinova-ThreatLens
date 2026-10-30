@@ -1,68 +1,37 @@
 
-import pytest
-
-from backend.app.indicators import validate_ip, validate_domain
-
-
-# IP validation tests
-
-def test_valid_ipv4():
-    assert validate_ip("8.8.8.8") == "8.8.8.8"
+import ipaddress
+import re
 
 
-def test_valid_ipv6():
-    assert validate_ip("2001:4860:4860::8888") == "2001:4860:4860::8888"
+def validate_ip(value: str) -> str:
+    """Validate an IPv4 or IPv6 address and return its normalized form."""
+    try:
+        return str(ipaddress.ip_address(value.strip()))
+    except ValueError as exc:
+        raise ValueError(f"Invalid IP address: {value}") from exc
 
 
-def test_ip_with_whitespace():
-    assert validate_ip(" 8.8.8.8 ") == "8.8.8.8"
+def validate_domain(value: str) -> str:
+    """Validate a domain name and return its normalized form."""
+    domain = value.strip().lower()
 
+    if not domain or len(domain) > 253:
+        raise ValueError(f"Invalid domain: {value}")
 
-def test_invalid_ip():
-    with pytest.raises(ValueError, match="Invalid IP address"):
-        validate_ip("999.1.1.1")
+    labels = domain.split(".")
 
+    if len(labels) < 2:
+        raise ValueError(f"Invalid domain: {value}")
 
-# Domain validation tests
+    for label in labels:
+        if (
+            not label
+            or len(label) > 63
+            or not re.fullmatch(
+                r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?",
+                label
+            )
+        ):
+            raise ValueError(f"Invalid domain: {value}")
 
-def test_valid_domain():
-    assert validate_domain("google.com") == "google.com"
-
-
-def test_uppercase_domain():
-    assert validate_domain("GOOGLE.COM") == "google.com"
-
-
-def test_domain_with_whitespace():
-    assert validate_domain(" google.com ") == "google.com"
-
-
-def test_invalid_underscore_domain():
-    with pytest.raises(ValueError, match="Invalid domain"):
-        validate_domain("bad_domain.com")
-
-
-def test_empty_domain():
-    with pytest.raises(ValueError, match="Invalid domain"):
-        validate_domain("")
-
-
-def test_domain_label_too_long():
-    domain = "a" * 64 + ".com"
-    with pytest.raises(ValueError, match="Invalid domain"):
-        validate_domain(domain)
-
-
-def test_leading_hyphen():
-    with pytest.raises(ValueError, match="Invalid domain"):
-        validate_domain("-google.com")
-
-
-def test_trailing_hyphen():
-    with pytest.raises(ValueError, match="Invalid domain"):
-        validate_domain("google-.com")
-
-
-def test_missing_tld():
-    with pytest.raises(ValueError, match="Invalid domain"):
-        validate_domain("google")
+    return domain
