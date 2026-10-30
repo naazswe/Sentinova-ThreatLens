@@ -1,6 +1,9 @@
 
 from fastapi import FastAPI
 
+from backend.app.schemas import Indicator
+
+
 app = FastAPI(
     title="Sentinova ThreatLens",
     description="Cyber Threat Intelligence and Analysis Platform",
@@ -14,3 +17,8 @@ def health_check():
         "status": "healthy",
         "service": "Sentinova ThreatLens",
     }
+
+
+@app.post("/indicators", response_model=Indicator, status_code=201)
+def create_indicator(indicator: Indicator):
+    return indicator
