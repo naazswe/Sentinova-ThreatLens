@@ -1,0 +1,20 @@
+{
+  "indicators": [
+    {
+      "indicator_type": "ip",
+      "value": "185.220.101.1"
+    },
+    {
+      "indicator_type": "domain",
+      "value": "malicious-example.com"
+    },
+    {
+      "indicator_type": "domain",
+      "value": "invalid_domain"
+    },
+    {
+      "indicator_type": "ip",
+      "value": "8.8.8.8"
+    }
+  ]
+}
