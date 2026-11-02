@@ -2,7 +2,7 @@
 from datetime import datetime, timezone
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.indicators import validate_ip, validate_domain
 
@@ -13,6 +13,7 @@ class IndicatorType(str, Enum):
 
 
 class Indicator(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     indicator_type: IndicatorType
     value: str
     source: str = Field(default="manual", max_length=100)
@@ -49,7 +50,17 @@ class Indicator(BaseModel):
             raise ValueError("Source cannot be empty")
 
         return source
+    @field_validator(
+        "first_seen",
+        "last_seen",
+        "created_at",
+    )
+    @classmethod
+    def normalize_timestamps(cls, value):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
 
+        return value.astimezone(timezone.utc)
     @model_validator(mode="after")
     def validate_timestamps(self):
         if self.last_seen < self.first_seen:
