@@ -2,9 +2,9 @@
 from sqlalchemy import (
     Column,
     DateTime,
+    Index,
     Integer,
     String,
-    UniqueConstraint,
 )
 
 from backend.app.database import Base
@@ -25,10 +25,11 @@ class IOCRecord(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     __table_args__ = (
-        UniqueConstraint(
+        Index(
+            "uq_indicator_type_value",
             "indicator_type",
             "value",
-            name="uq_indicator_type_value",
+            unique=True,
         ),
         {"sqlite_autoincrement": True},
     )

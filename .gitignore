@@ -4,3 +4,12 @@ __pycache__/
 .pytest_cache/
 .env
 sentinova.db
+
+# Alembic migration cache
+migrations/__pycache__/
+migrations/versions/__pycache__/
+
+# Local database backups
+*.db
+*.db-wal
+*.db-shm
