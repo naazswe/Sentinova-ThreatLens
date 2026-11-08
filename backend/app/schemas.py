@@ -5,7 +5,7 @@ from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from backend.app.indicators import validate_ip, validate_domain
-
+from typing import Literal
 
 class IndicatorType(str, Enum):
     IP = "ip"
@@ -14,6 +14,7 @@ class IndicatorType(str, Enum):
 
 class Indicator(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     indicator_type: IndicatorType
     value: str
     source: str = Field(default="manual", max_length=100)
@@ -69,3 +70,59 @@ class Indicator(BaseModel):
             )
 
         return self
+
+class IndicatorRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    indicator_type: IndicatorType
+    value: str
+    source: str
+
+    first_seen: datetime
+    last_seen: datetime
+    created_at: datetime
+
+    severity_score: int | None = None
+    severity: str = "unknown"
+    confidence: int | None = None
+    @field_validator(
+        "first_seen",
+        "last_seen",
+        "created_at",
+    )
+    @classmethod
+    def normalize_timestamps(cls, value):
+        if value.tzinfo is None:
+            return value.replace(tzinfo=timezone.utc)
+
+        return value.astimezone(timezone.utc)
+
+class EnrichmentRead(BaseModel):
+    id: int
+    indicator_id: int
+    provider: str
+    abuse_confidence_score: int
+    total_reports: int | None
+    num_distinct_users: int | None
+    last_reported_at: datetime | None
+    lookup_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class AlertRead(BaseModel):
+    id: int
+    indicator_id: int
+    alert_type: str
+    severity: str
+    title: str
+    description: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AlertStatusUpdate(BaseModel):
+    status: Literal["open", "acknowledged", "resolved"]

@@ -4,11 +4,16 @@ import pytest
 from datetime import datetime
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.database import Base, get_db
+from backend.app.database import (
+    Base,
+    enable_sqlite_foreign_keys,
+    get_db,
+)
+
 from backend.app.main import app
 from backend.app.models import IOCRecord
 
@@ -20,6 +25,12 @@ def client(tmp_path):
     test_engine = create_engine(
         f"sqlite:///{database_path}",
         connect_args={"check_same_thread": False},
+    )
+
+    event.listen(
+    test_engine,
+    "connect",
+    enable_sqlite_foreign_keys,
     )
 
     TestingSessionLocal = sessionmaker(
@@ -193,3 +204,126 @@ def test_integrity_error_recovers_from_concurrent_duplicate(
     ]
 
     assert len(matching_records) == 1
+
+def test_csv_feed_endpoint_ingests_valid_records(client):
+    csv_content = """indicator_type,value
+ip,185.220.101.1
+domain,csv-test.example
+"""
+
+    response = client.post(
+        "/feeds/ingest/csv?source=CSVEndpointTest",
+        content=csv_content,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["source"] == "CSVEndpointTest"
+    assert data["received"] == 2
+    assert data["inserted"] == 2
+    assert data["updated"] == 0
+    assert data["rejected"] == 0
+
+def test_csv_feed_endpoint_rejects_invalid_ioc(client):
+    csv_content = """indicator_type,value
+ip,185.220.101.1
+domain,invalid_domain
+"""
+
+    response = client.post(
+        "/feeds/ingest/csv?source=CSVInvalidTest",
+        content=csv_content,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["received"] == 2
+    assert data["inserted"] == 1
+    assert data["rejected"] == 1
+    assert data["rejected_records"][0]["index"] == 1
+
+def test_csv_feed_endpoint_rejects_missing_columns(client):
+    csv_content = """type,address
+ip,8.8.8.8
+"""
+
+    response = client.post(
+        "/feeds/ingest/csv",
+        content=csv_content,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert response.status_code == 400
+    assert "indicator_type and value" in response.json()["detail"]
+
+def test_csv_feed_endpoint_rejects_empty_content(client):
+    response = client.post(
+        "/feeds/ingest/csv",
+        content="",
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert response.status_code == 400
+    assert "cannot be empty" in response.json()["detail"]
+
+def test_csv_feed_endpoint_records_source(client):
+    csv_content = """indicator_type,value
+domain,source-test.example
+"""
+
+    response = client.post(
+        "/feeds/ingest/csv?source=ThreatIntelFeed",
+        content=csv_content,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert response.status_code == 200
+
+    indicators = client.get("/indicators").json()
+
+    matching = [
+        item for item in indicators
+        if item["value"] == "source-test.example"
+    ]
+
+    assert len(matching) == 1
+    assert matching[0]["source"] == "ThreatIntelFeed"
+
+def test_csv_feed_endpoint_handles_duplicate_records(client):
+    csv_content = """indicator_type,value
+domain,duplicate-csv.example
+"""
+
+    first_response = client.post(
+        "/feeds/ingest/csv?source=CSVRepeatTest",
+        content=csv_content,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    second_response = client.post(
+        "/feeds/ingest/csv?source=CSVRepeatTest",
+        content=csv_content,
+        headers={"Content-Type": "text/csv"},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    assert first_response.json()["inserted"] == 1
+    assert second_response.json()["inserted"] == 0
+    assert second_response.json()["updated"] == 1
+
+    indicators = client.get("/indicators").json()
+
+    matching = [
+        item for item in indicators
+        if item["value"] == "duplicate-csv.example"
+    ]
+
+    assert len(matching) == 1

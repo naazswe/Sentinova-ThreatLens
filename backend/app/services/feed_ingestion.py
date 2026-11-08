@@ -1,15 +1,18 @@
 from sqlalchemy.orm import Session
 
+from backend.app.feeds.csv_parser import parse_csv_feed
 from backend.app.feeds.parser import parse_feed_payload
 from backend.app.services.indicator_service import save_indicator
 
 
-def ingest_feed_payload(
+def ingest_validated_indicators(
     db: Session,
-    payload: dict,
+    accepted: list,
+    rejected: list,
     source: str,
+    received: int,
 ):
-    accepted, rejected = parse_feed_payload(payload, source)
+    """Persist validated indicators and return ingestion statistics."""
 
     inserted = 0
     updated = 0
@@ -24,9 +27,44 @@ def ingest_feed_payload(
 
     return {
         "source": source,
-        "received": len(payload["indicators"]),
+        "received": received,
         "inserted": inserted,
         "updated": updated,
         "rejected": len(rejected),
         "rejected_records": rejected,
     }
+
+
+def ingest_feed_payload(
+    db: Session,
+    payload: dict,
+    source: str,
+):
+    accepted, rejected = parse_feed_payload(payload, source)
+
+    return ingest_validated_indicators(
+        db=db,
+        accepted=accepted,
+        rejected=rejected,
+        source=source,
+        received=len(payload["indicators"]),
+    )
+
+
+def ingest_csv_feed(
+    db: Session,
+    csv_content: str,
+    source: str,
+):
+    accepted, rejected, received = parse_csv_feed(
+        csv_content,
+        source,
+    )
+
+    return ingest_validated_indicators(
+        db=db,
+        accepted=accepted,
+        rejected=rejected,
+        source=source,
+        received=received,
+    )
